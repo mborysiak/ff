@@ -5,11 +5,5 @@ from setuptools import setup
 setup(name='ff_functions',
       version='0.0.1',
       author='Mark',
-      packages=['ff_functions'],
-      install_requires=['pandas'])
-
-
-      import sqlite3
-    import os
-    import datetime as dt
-    from shutil import copyfile
+      packages=['ff'],
+      install_requires=['pandas', 'datetime'])

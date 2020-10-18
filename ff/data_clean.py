@@ -1,5 +1,7 @@
 #%%
 
+import pandas as pd
+
 def name_clean(player_name):
     """Cleans up player names from special characters to ensure 
     matching between data sources
@@ -37,11 +39,11 @@ def convert_to_float(df):
         pandas.Dataframe: dataframe with all possible columns converted to float
     
     Test:
-    >>> pd.DataFrame({'A': ['a', 'b'], 
-    ...               'B': ['3', '2']})
-        A  B
-        0  a  3
-        1  b  2
+        >>> pd.DataFrame({'A': ['a', 'b'], 
+        ...               'B': ['3', '2']})
+            A  B
+            0  a  3
+            1  b  2
     """    
     for c in df.columns:
         try: df[c] = df[c].astype('float')
