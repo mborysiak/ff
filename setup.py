@@ -5,5 +5,5 @@ from setuptools import setup
 setup(name='ff_functions',
       version='0.0.1',
       author='Mark',
-      packages=['ff'],
+      packages=['ff', 'ff.modeling'],
       install_requires=['pandas', 'datetime'])

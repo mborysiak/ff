@@ -1,71 +1,128 @@
 from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.decomposition import PCA
 import pandas as pd 
+import numpy as np
 
 
-def std_scale(X, X_test=None):
-    """Standard scale dataframe and return as dataframe
+def Xy_split(df, y_metric):
+    """Split train dataset into X and y by excluding non-numeric values
+
+    Args:
+        df (pandas.DataFrame): DataFrame containing samples features and target variable
+        y_metric (str): Column name of target variable to split into y
+
+    Returns:
+        X (pandas.DataFrame): Features matrix with numeric columns
+        y (pandas.DataFrame): Target vector containing corresponding measure
+    """ 
+    # select only numeric columns and drop the specific y-metric
+    X = df.select_dtypes(exclude=['object'])
+
+    # create the y variable based on input metric, if it exists
+    if y_metric in df.columns: 
+        X = X.drop(y_metric, axis=1)
+        y = df[y_metric]
+    else: 
+        y = None
+        print(f'{y_metric} not in dataframe to create y')
+
+    return X, y
+
+
+def Xy_split_list(df, y_metric, col_list):
+    """Split train dataset into X and y by passing list of desired columns
+
+    Args:
+        df (pandas.DataFrame): DataFrame containing samples features and target variable
+        y_metric (str): Column name of target variable to split into y
+        col_list (str): List of column names to keep within X dataframe
+
+    Returns:
+        X (pandas.DataFrame): Features matrix with selected columns
+        y (pandas.DataFrame): Target vector containing corresponding measure
+    """ 
+    # create the X variable based on column list
+    X = df[col_list]
+    
+    # create the y variable based on input metric, if it exists
+    if y_metric in df.columns: 
+        y = df[y_metric]
+    else: 
+        y = None
+        print(f'{y_metric} not in dataframe to create y')
+
+    return X, y
+
+
+def data_scale(X, X_test=None, sc=StandardScaler()):
+    """Standard (or other) scale dataframe and return as dataframe
 
     Args:
         X (pandas.DataFrame): Dataframe to be scaled
+        X_test (pandas.DataFrame, optional): Test dataframe to transform. Defaults to None.
+        sc (preprocessing.Scale, optional): Scaling transform object. Defaults to StandardScaler().
 
     Returns:
         pandas.DataFrame: Scaled dataframe
         StandardScaler: Scaling object for transforming if needed
-    """    
-    sc = StandardScaler()
-    X = pd.DataFrame(sc.fit_transform(X))
+    """        
+    X = pd.DataFrame(sc.fit_transform(X), columns=X.columns)
     if X_test is not None:
-        X_test = pd.DataFrame(sc.transform(X_test), columns=X_test) 
+        X_test = pd.DataFrame(sc.transform(X_test), columns=X_test.columns) 
 
     return X, X_test
 
 
-def fill_metrics(met, df, X_cols):
-    
-    print(f'============\n{met}\n------------')
-    
-    train = df[~df[met].isnull()]
-    predict = df[df[met].isnull()]
-    
-    y = train[met]
-    X = train[X_cols]
-    
-    sc = StandardScaler()
+def pca_scale(X_train, X_val=None, n_comp=10, rseed=1234):
+    """Perform PCA scaling on X_train dataset and validation if present
 
-    X_sc = sc.fit_transform(X)
-    pred_sc = sc.transform(predict[X_cols])
-    pred_sc = pd.DataFrame(pred_sc, columns=X_cols)
+    Args:
+        X_train (pandas.DataFrame): Training matrix dataset
+        X_val (pandas.DataFrame, optional): Validation dataset. Defaults to None.
+        n_comp (int, optional): [description]. Defaults to 10.
 
-    lr = LinearRegression()
-    lr.fit(X_sc, y)
-    print('R2 Score', round(lr.score(X_sc, y), 3))
-    print(pd.Series(lr.coef_, index=X.columns))
-    
-    df.loc[df[met].isnull(), met] = lr.predict(pred_sc)
-    
-    return df
+    Returns:
+        X_train (pandas.DataFrame): PCA-transformed training dataset
+        X_val (pandas.DataFrame): PCA-transformed validation dataset
+    """    
+    # ensure that n_components is less than number of columns and rows
+    n_comp = np.min([X_train.shape[1], X_train.shape[0], n_comp])
+
+    # fit the PCA object
+    pca = PCA(n_components=n_comp, random_state=rseed, svd_solver='randomized')
+    pca.fit(X_train)
+
+    # transform train (and validation if present) and pass array back into dataframe
+    X_train = pd.DataFrame(pca.transform(X_train), 
+                           columns=['pca' + str(i) for i in range(n_comp)])
+    if X_val is not None:
+        X_val = pd.DataFrame(pca.transform(X_val), 
+                             columns=['pca' + str(i) for i in range(n_comp)])
+
+    return X_train, X_val
 
 
-def reverse_metrics(met, train, predict, X_cols):
-    
-    print(f'============\n{met}\n------------')
-    
-    y = train[met]
-    X = train[X_cols]
-    
-    sc = StandardScaler()
+def one_hot(df, col, drop_first=True):
+    """Add one-hot-encoded columns to pandas dataframe.
 
-    X_sc = sc.fit_transform(X)
-    pred_sc = sc.transform(predict[X_cols])
-    pred_sc = pd.DataFrame(pred_sc, columns=X_cols)
+    Args:
+        df (pandas.DataFrame): DataFrame with column to be encoded
+        col (str): Column to be one-hot-encoded
 
-    lr = LinearRegression()
-    lr.fit(X_sc, y)
-    print('R2 Score', round(lr.score(X_sc, y), 3))
-    print(pd.Series(lr.coef_, index=X.columns))
-    
-    predict[met] = lr.predict(pred_sc)
-    
-    return predict
+    Returns:
+        pandas.DataFrame: DataFrame with OHE column (and original dropped)
+    """    
+    if col in df.columns:
+        return pd.concat([df, pd.get_dummies(df[col], drop_first=drop_first)], axis=1).drop(col, axis=1)
+    else:
+        print(f'{col} does not exist in dataframe') 
 
+
+def count_null(df):
+    """Count null values for each column in DataFrame
+
+    Args:
+        df (pandas.DataFrame): DataFrame to count nulls in each column
+    """    
+    print('Null Counts:', df.isnull().sum()[df.isnull().sum() > 0])
