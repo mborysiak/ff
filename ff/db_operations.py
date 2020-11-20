@@ -2,7 +2,7 @@
 import datetime as dt
 import os
 import shutil
-from ff.ff_general import get_timestamp, get_username
+from ff.general import get_timestamp, get_username
 import sqlite3
 import pandas as pd 
 

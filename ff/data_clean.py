@@ -49,3 +49,15 @@ def convert_to_float(df):
         try: df[c] = df[c].astype('float')
         except: pass
     return df
+
+
+def remove_dup_cols(df):
+    """Remove duplicated columns in dataframe
+
+    Args:
+        df (pandas.DataFrame): DataFrame with duplicated columns to condense
+
+    Returns:
+        pandas.DataFrame: DataFrame with duplicated columns removed
+    """    
+    return df.loc[:,~df.columns.duplicated()]
