@@ -30,7 +30,7 @@ class SciKitModel(PipeSetup):
         np.random.seed(set_seed)
 
 
-    def default_params(self, model_name, num_steps={}):
+    def default_params(self, pipe, bayes=True):
         """Function that returns default search parameters for pipe components
 
         Args:
@@ -56,74 +56,82 @@ class SciKitModel(PipeSetup):
         Returns:
             [type]: [description]
         """        
+        if bayes:
+            int_var = 'Integer'
+            real_var = 'Real'
+            cat_var = 'Categorical'
+        else:
+            int_var = 'range'
+            real_var = 'np.arange'
+            cat_var = ''
 
-        num_params = {
-            'agglomeration': {'n_clusters': Integer(2, 30)},
-            'pca': {'n_components': Integer(1, 30)},
-            'k_best': {'k': Integer(1, 50)},
-            'select_perc': {'percentile': Real(0.02, 0.5)},
+        param_options = {
+
+            # feature params
+            'agglomeration': {'n_clusters': eval(f'{int_var}(2, 20)')},
+            'pca': {'n_components': eval(f'{int_var}(1, 20)')},
+            'k_best': {'k': eval(f'{int_var}(1, 20)')},
+            'select_perc': {'percentile': eval(f'{int_var}(10, 50)')},
             'select_from_model': {'estimator': [Ridge(alpha=0.1), Ridge(alpha=1), Ridge(alpha=10),
                                                 Lasso(alpha=0.1), Lasso(alpha=1), Lasso(alpha=10),
                                                 RandomForestRegressor(max_depth=5), 
                                                 RandomForestRegressor(max_depth=10)]},
-            'feature_drop': {'col': Categorical(['avg_pick', None])}
-        }
+            'feature_drop': {'col': Categorical(['avg_pick', None])},
+            'feature_select': {'col': Categorical(['avg_pick'])},
 
-        model_params = {
+            # model params
             'ridge': {'alpha': Real(0.1, 1000, prior='log-uniform')},
             'lasso': {'alpha': Real(0.1, 1000, prior='log-uniform')},
-            'enet': {'alpha': Real(0.1, 1000, prior='log-uniform'),
-                     'l1_ratio': Real(0.5, 0.95)},
-            'rf': {'n_estimators': Integer(50, 250),
-                   'max_depth': Integer(2, 25),
-                   'min_samples_leaf': Integer(1, 10),
-                   'max_features': Real(0.1, 1)},
-            'lgbm': {'n_estimators': Integer(25, 250),
-                     'max_depth': Integer(2, 50),
-                     'learning_rate': Real(10**-5, 1, 'log-uniform'),
-                     'colsample_bytree': Real(0.05, 1),
-                     'subsample': Real(0.05, 1),
-                     'min_child_weight': Real(0.1, 100, 'log_uniform'),
-                     'reg_lambda': Real(0.001, 1000, 'log_uniform'),
-                     'reg_alpha': Real(0.001, 10, 'log_uniform')},
+            'enet': {'alpha': eval(f'{real_var}(0.1, 1000)'),
+                    'l1_ratio': eval(f'{real_var}(0.05, 0.95)')},
+            'rf': {'n_estimators': eval(f'{int_var}(50, 250)'),
+                'max_depth': eval(f'{int_var}(2, 25)'),
+                'min_samples_leaf': eval(f'{int_var}(1, 10)'),
+                'max_features': eval(f'{real_var}(0.1, 1)')},
+            'lgbm': {'n_estimators': eval(f'{int_var}(50, 250)'),
+                    'max_depth': eval(f'{int_var}(2, 50)'),
+                    'colsample_bytree': eval(f'{real_var}(0.05, 1)'),
+                    'subsample':  eval(f'{real_var}(0.05, 1)'),
+                    'min_child_weight':  eval(f'{int_var}(0, 100)'),
+                    'reg_lambda': eval(f'{int_var}(0, 10000)'),
+                    'reg_alpha':eval(f'{int_var}(0, 1000)')},
             'xgb': {'n_estimators': Integer(25, 250),
-                     'max_depth': Integer(2, 50),
-                     'learning_rate': Real(10**-5, 1, 'log-uniform'),
-                     'colsample_bytree': Real(0.05, 1),
-                     'subsample': Real(0.05, 1),
-                     'min_child_weight': Real(0.1, 100, 'log_uniform'),
-                     'reg_lambda': Real(0.001, 1000, 'log_uniform'),
-                     'reg_alpha': Real(0.001, 10, 'log_uniform')},
+                    'max_depth': Integer(2, 50),
+                    'learning_rate': Real(10**-5, 1, 'log-uniform'),
+                    'colsample_bytree': Real(0.05, 1),
+                    'subsample': Real(0.05, 1),
+                    'min_child_weight': Real(0.1, 100, 'log_uniform'),
+                    'reg_lambda': Real(0.001, 1000, 'log_uniform'),
+                    'reg_alpha': Real(0.001, 10, 'log_uniform')},
             'knn': {'n_neighbors': Integer(2, 20),
                     'weights': Categorical(['distance', 'uniform']),
                     'algorithm': Categorical(['auto', 'ball_tree', 'kd_tree', 'brute'])},
             'svr': {'C': Real(0.0001, 1000, 'log_uniform')}
-
         }
-
-        if self.num_and_cat:
-            num_prefix = 'preprocessor__numeric'
-            cat_prefix = 'preprocessor__cat'
-        else:
-            num_prefix = 'preprocessor'
-            cat_prefix = 'preprocessor'
 
         # initialize the parameter dictionary
         params = {}
 
-        # add numeric processing params to dictionary
-        for ns in num_steps:
-            try:
-                params_tmp = num_params[ns]
-                for k, v in params_tmp.items():
-                    params[f'{num_prefix}__{ns}__{k}'] = v
-            except: pass
+        # get all the name steps in the pipe
+        steps = pipe.named_steps
 
-        # add model parameters to the dictionary 
-        params_tmp = model_params[model_name]
-        for k, v in params_tmp.items():
-            params[f'model__{k}'] = v
+        # begin looping through each step
+        for step, _ in steps.items():
 
+            # if the step has default params, then loop through hyperparams and add to dict
+            if step in param_options.keys():
+                for hyper_param, value in param_options[step].items():
+                    params[f'{step}__{hyper_param}'] = value
+
+            # if the step is feature union go inside and find steps within 
+            if step == 'feature_union':
+                outer_transform = pipe.named_steps[step].get_params()['transformer_list']
+
+                # add each feature union step prefixed by feature_union
+                for inner_step in outer_transform:
+                    for hyper_param, value in param_options[inner_step[0]].items():
+                        params[f'{step}__{inner_step[0]}__{hyper_param}'] = value
+                
         return params
 
 
@@ -139,10 +147,12 @@ class SciKitModel(PipeSetup):
 
         return scorers[score_type]
 
+
     def fit_opt(self, opt_model):
         
         opt_model.fit(self.X, self.y)
         return opt_model.best_estimator_
+
 
     def grid_search(self, pipe_to_fit, params, cv=5, scoring='neg_mean_squared_error'):
 
@@ -171,16 +181,16 @@ class SciKitModel(PipeSetup):
 
 
     def cv_score(self, model, cv=5, scoring='neg_mean_squared_error', 
-                 n_jobs=-1, return_mean=True):
+                 n_jobs=1, return_mean=True):
 
-        score = cross_val_score(model, self.X, self.y, cv=cv, n_jobs=-1, scoring=scoring)
+        score = cross_val_score(model, self.X, self.y, cv=cv, n_jobs=n_jobs, scoring=scoring)
         if return_mean:
             score = np.mean(score)
         return score
 
 
     def cv_predict(self, model, cv=5, n_jobs=-1):
-        pred = cross_val_predict(self.pipe, self.X, self.y, cv=cv, n_jobs=n_jobs)
+        pred = cross_val_predict(model, self.X, self.y, cv=cv, n_jobs=n_jobs)
         return pred
 
 
