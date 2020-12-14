@@ -14,7 +14,7 @@ from sklearn.cluster import FeatureAgglomeration
 from sklearn.linear_model import Ridge, Lasso, LinearRegression, LogisticRegression, ElasticNet
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
-from sklearn.ensemble import VotingRegressor, VotingClassifier
+from sklearn.ensemble import VotingRegressor, VotingClassifier, StackingRegressor, StackingClassifier
 from xgboost import XGBRegressor, XGBClassifier
 from lightgbm import LGBMRegressor, LGBMClassifier
 from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
@@ -62,12 +62,13 @@ class FeatureDrop(BaseEstimator,TransformerMixin):
 
 class FeatureSelect(BaseEstimator, TransformerMixin):
 
-    def __init__(self, col=''):
+    def __init__(self, cols=[]):
         """
         A Custom BaseEstimator that can switch between classifiers.
         :param estimator: sklearn object - The classifier
         """ 
-        self.col = col
+        self.cols = cols
+        self.n_features_in_ = len(cols)
 
 
     def fit(self, X, y=None):
@@ -75,7 +76,7 @@ class FeatureSelect(BaseEstimator, TransformerMixin):
 
 
     def transform(self, X, y=None):
-        return X.loc[:, [self.col]]
+        return X.loc[:, self.cols]
 
 
 
@@ -110,17 +111,8 @@ class PipeSetup(DataSetup):
         return ('feature_union', FeatureUnion(pieces))
 
 
-    # def return_piece_options(self):
-    #     """Function that returns all possible components of the pipeline
-
-    #     Returns:
-    #         dict: Label-Object pairs for all choices
-    #     """        
-    #     return self.piece_options
-
-
-    def piece(self, label):
-        """Helper function to return piece or component of pipeline
+    def piece(self, label, label_rename=None):
+        """Helper function to return piece or component of pipeline.
 
         Args:
             label (str): Label of desired component to return. To return all
@@ -129,6 +121,23 @@ class PipeSetup(DataSetup):
                                   'std_scale' = OneHotEncoder() 
                                   'min_max_scale' = MinMaxScaler()
                                   'pca' = PCA()
+                                  'feature_select' = FeatureSelect()
+                                  'feature_drop' = FeatureDrop()
+                                  'select_perc' = SelectPercentile()
+                                  'select_from_model' = SelectFromModel()
+                                  'agglomeration' = FeatureAgglomeration()
+                                  'k_best' = SelectKBest(score_func=f_regression, k=10)
+                                  'feature_switcher' = FeatureExtractionSwitcher()
+                                  'lr' = LinearRegression()
+                                  'ridge' = Ridge()
+                                  'lasso' = Lasso()
+                                  'enet' = ElasticNet()
+                                  'rf' = RandomForestRegressor()
+                                  'xgb' = XGBRegressor()
+                                  'lgbm' = LGBMRegressor()
+                                  'knn' = KNeighborsRegressor()
+                                  'gbm' = GradientBoostingRegressor(),
+                                  'svr' = LinearSVR()
 
         Returns:
             tuple: (Label, Object) tuple of specified component
@@ -139,7 +148,7 @@ class PipeSetup(DataSetup):
                 'std_scale': StandardScaler(),
                 'min_max_scale': MinMaxScaler(),
                 'pca': PCA(),
-                'feature_select': FeatureSelect(),
+                'feature_select': FeatureSelect(['avg_pick']),
                 'feature_drop': FeatureDrop(),
                 'select_perc': SelectPercentile(score_func=f_regression, percentile=10),
                 'select_from_model': SelectFromModel(estimator=Ridge()),
@@ -158,7 +167,27 @@ class PipeSetup(DataSetup):
                 'svr': LinearSVR()
             }
 
-        return (label, piece_options[label])
+        piece = (label, piece_options[label])
+
+        if label_rename:
+            piece = self.piece_rename(piece, label_rename)
+
+        return piece
+
+    def piece_rename(self, piece, label_rename):
+        """Rename the label of each piece
+
+        Args:
+            piece (tuple): Tuple of (label, object) to rename
+            label_rename (str): Name to rename the tuple label with
+
+        Returns:
+            tuple: Renamed (label, object) tuple for given piece
+        """
+        piece = list(piece)
+        piece[0] = label_rename
+
+        return tuple(piece)
 
     
     def _column_transform(self, num_pipe, cat_pipe):
@@ -178,22 +207,61 @@ class PipeSetup(DataSetup):
                         ('cat', cat_pipe, self.cat_features)
                     ])
     
-    def stack_pipe(self, pipes, pipe_params):
+    def ensemble_pipe(self, pipes):
+        """Create a mean ensemble pipe where individual pipes feed into 
+           a mean voting ensemble model.
 
+        Args:
+            pipes (list): List of pipes that will have their outputs averaged
+
+        Returns:
+            Pipeline: Pipeline object that has multiple multiple feeding Voting object
+        """
         ests = []
         for i, p in enumerate(pipes):
             ests.append((f'p{i}', p))
 
         if self.model_obj == 'reg':
-            stack = VotingRegressor(estimators=ests)
+            ensemble = VotingRegressor(estimators=ests)
         elif self.model_obj == 'class':
-            stack = VotingClassifier(estimators=ests)
+            ensemble = VotingClassifier(estimators=ests)
+        
+        return Pipeline([('ensemble', ensemble)])
 
+    
+    def ensemble_params(self, pipe_params):
+        """Create the dictionary of all ensemble params for list of pipes
+
+        Args:
+            pipe_params (list): List of dictionary parameters for each pipe
+
+        Returns:
+            dict: Large dictionary containing all parameters within ensemble
+        """        
         stack_params = {}
         for i, p in enumerate(pipe_params):
             for k, v in p.items():
-                stack_params[f'stack__p{i}__{k}'] = v
-        
-        stack_pipe = Pipeline([('stack', stack)])
+                stack_params[f'ensemble__p{i}__{k}'] = v
 
-        return stack_pipe, stack_params
+        return stack_params
+
+
+    def stack_pipe(self, pipes, final_estimator):
+        """Create a stacking ensemble pipe where individual pipes feed into
+           a final stacking estimator model.
+
+        Args:
+            pipes (list): List of pipes that will have their outputs averaged
+            final_estimator (sklearn.estimator): Estimator that will fit on model input predictions
+
+        Returns:
+            skklearn.StackingEstimator: Stacked estimator that will train on other model inputs
+        """
+        ests = []
+        for i, p in enumerate(pipes):
+            ests.append((f'stack_p{i}', p))
+
+        if self.model_obj == 'reg':
+            return StackingRegressor(pipes, final_estimator=final_estimator)
+        if self.model_obj == 'reg':
+            return StackingRegressor(pipes, final_estimator=final_estimator)

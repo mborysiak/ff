@@ -4,7 +4,8 @@ import pandas as pd
 import numpy as np
 
 # model and search setup
-from sklearn.model_selection import cross_val_score, cross_val_predict, GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import cross_val_score, cross_val_predict, GridSearchCV, RandomizedSearchCV, KFold
+
 from skopt import BayesSearchCV
 from skopt.space import Real, Integer, Categorical
 from sklearn.linear_model import Ridge, Lasso
@@ -29,8 +30,19 @@ class SciKitModel(PipeSetup):
         self.model_obj = model_obj
         np.random.seed(set_seed)
 
+    def param_range(self, var_type, low, high, spacing, bayes_rand):
 
-    def default_params(self, pipe, bayes=True):
+        if bayes_rand=='bayes':
+            if var_type=='int': return Integer(low, high)
+            if var_type=='real': return Real(low, high)
+            if var_type=='cat': return Categorical(low)
+        elif bayes_rand=='rand':
+            if var_type=='int': return range(low, high, spacing)
+            if var_type=='real': return np.arange(low, high, spacing)
+            if var_type=='cat': return low
+
+
+    def default_params(self, pipe, bayes_rand='rand'):
         """Function that returns default search parameters for pipe components
 
         Args:
@@ -56,57 +68,52 @@ class SciKitModel(PipeSetup):
         Returns:
             [type]: [description]
         """        
-        if bayes:
-            int_var = 'Integer'
-            real_var = 'Real'
-            cat_var = 'Categorical'
-        else:
-            int_var = 'range'
-            real_var = 'np.arange'
-            cat_var = ''
 
+        br = bayes_rand
         param_options = {
 
             # feature params
-            'agglomeration': {'n_clusters': eval(f'{int_var}(2, 20)')},
-            'pca': {'n_components': eval(f'{int_var}(1, 20)')},
-            'k_best': {'k': eval(f'{int_var}(1, 20)')},
-            'select_perc': {'percentile': eval(f'{int_var}(10, 50)')},
+            'agglomeration': {'n_clusters': self.param_range('int', 2, 40, 4, br)},
+            'pca': {'n_components': self.param_range('int', 2, 40, 4, br)},
+            'k_best': {'k': self.param_range('int', 2, 40, 4, br)},
+            'select_perc': {'percentile': self.param_range('int', 20, 80, 4, br)},
             'select_from_model': {'estimator': [Ridge(alpha=0.1), Ridge(alpha=1), Ridge(alpha=10),
                                                 Lasso(alpha=0.1), Lasso(alpha=1), Lasso(alpha=10),
                                                 RandomForestRegressor(max_depth=5), 
                                                 RandomForestRegressor(max_depth=10)]},
-            'feature_drop': {'col': Categorical(['avg_pick', None])},
-            'feature_select': {'col': Categorical(['avg_pick'])},
+            'feature_drop': {'col': self.param_range('cat', ['avg_pick', None], None, None, br)},
+            'feature_select': {'cols': self.param_range('cat', [['avg_pick'], ['avg_pick', 'year']], None, None, br)},
 
             # model params
-            'ridge': {'alpha': Real(0.1, 1000, prior='log-uniform')},
-            'lasso': {'alpha': Real(0.1, 1000, prior='log-uniform')},
-            'enet': {'alpha': eval(f'{real_var}(0.1, 1000)'),
-                    'l1_ratio': eval(f'{real_var}(0.05, 0.95)')},
-            'rf': {'n_estimators': eval(f'{int_var}(50, 250)'),
-                'max_depth': eval(f'{int_var}(2, 25)'),
-                'min_samples_leaf': eval(f'{int_var}(1, 10)'),
-                'max_features': eval(f'{real_var}(0.1, 1)')},
-            'lgbm': {'n_estimators': eval(f'{int_var}(50, 250)'),
-                    'max_depth': eval(f'{int_var}(2, 50)'),
-                    'colsample_bytree': eval(f'{real_var}(0.05, 1)'),
-                    'subsample':  eval(f'{real_var}(0.05, 1)'),
-                    'min_child_weight':  eval(f'{int_var}(0, 100)'),
-                    'reg_lambda': eval(f'{int_var}(0, 10000)'),
-                    'reg_alpha':eval(f'{int_var}(0, 1000)')},
-            'xgb': {'n_estimators': Integer(25, 250),
-                    'max_depth': Integer(2, 50),
-                    'learning_rate': Real(10**-5, 1, 'log-uniform'),
-                    'colsample_bytree': Real(0.05, 1),
-                    'subsample': Real(0.05, 1),
-                    'min_child_weight': Real(0.1, 100, 'log_uniform'),
-                    'reg_lambda': Real(0.001, 1000, 'log_uniform'),
-                    'reg_alpha': Real(0.001, 10, 'log_uniform')},
-            'knn': {'n_neighbors': Integer(2, 20),
-                    'weights': Categorical(['distance', 'uniform']),
-                    'algorithm': Categorical(['auto', 'ball_tree', 'kd_tree', 'brute'])},
-            'svr': {'C': Real(0.0001, 1000, 'log_uniform')}
+            'ridge': {'alpha': self.param_range('int', 1, 1000, 1, br)},
+            'lasso': {'alpha': self.param_range('int', 1, 1000, 1, br)},
+            'enet': {'alpha': self.param_range('int', 1, 1000, 1, br),
+                    'l1_ratio': self.param_range('real', 0.05, 0.95, 0.05, br)},
+            'rf': {'n_estimators': self.param_range('int', 50, 250, 10, br),
+                    'max_depth': self.param_range('int', 2, 30, 2, br),
+                    'min_samples_leaf': self.param_range('int', 1, 10, 1, br),
+                    'max_features': self.param_range('real', 0.1, 1, 0.1, br)},
+            'lgbm': {'n_estimators': self.param_range('int', 50, 250, 25, br),
+                     'max_depth': self.param_range('int', 2, 30, 2, br),
+                     'colsample_bytree': self.param_range('real', 0.2, 1, 0.2, br),
+                     'subsample':  self.param_range('real', 0.2, 1, 0.2, br),
+                    # 'min_child_weight':  self.param_range('int', 1, 100, 20, br),
+                     'reg_lambda': self.param_range('int', 0, 1000, 50, br)},
+            'xgb': {'n_estimators': self.param_range('int', 50, 250, 25, br),
+                     'max_depth': self.param_range('int', 2, 30, 2, br),
+                     'colsample_bytree': self.param_range('real', 0.2, 1, 0.2, br),
+                     'subsample':  self.param_range('real', 0.2, 1, 0.2, br),
+                    # 'min_child_weight':  self.param_range('int', 1, 100, 20, br),
+                     'reg_lambda': self.param_range('int', 0, 1000, 50, br)},
+            'gbm': {'n_estimators': self.param_range('int', 50, 250, 20, br),
+                    'max_depth': self.param_range('int', 2, 30, 3, br),
+                    'min_samples_leaf': self.param_range('int', 1, 10, 2, br),
+                    'max_features': self.param_range('real', 0.1, 1, 0.2, br),
+                    'subsample': self.param_range('real', 0.1, 1, 0.2, br)},
+            'knn': {'n_neighbors':  self.param_range('int',1, 30, 1, br),
+                    'weights': self.param_range('cat',['distance', 'uniform'], None, None, br),
+                    'algorithm': self.param_range('cat', ['auto', 'ball_tree', 'kd_tree', 'brute'], None, None, br)},
+            'svr': {'C': self.param_range('real', 0.1, 100, 1, br)}
         }
 
         # initialize the parameter dictionary
@@ -154,54 +161,55 @@ class SciKitModel(PipeSetup):
         return opt_model.best_estimator_
 
 
-    def grid_search(self, pipe_to_fit, params, cv=5, scoring='neg_mean_squared_error'):
+    def grid_search(self, pipe_to_fit, X, y, params, cv=5, scoring='neg_mean_squared_error'):
 
-        search = GridSearchCV(pipe_to_fit, params, scoring=scoring, refit=True)
-        best_model = self.fit_opt(search)
+        search = GridSearchCV(pipe_to_fit, params, cv=cv, scoring=scoring, refit=True)
+        best_model = search.fit(X, y)
 
-        return best_model
-
-
-    def random_search(self, pipe_to_fit, params, cv=5, n_iter=50, scoring='neg_mean_squared_error'):
-
-        search = RandomizedSearchCV(pipe_to_fit, params, n_iter=n_iter, scoring=scoring, refit=True)
-        best_model = self.fit_opt(search)
-
-        return best_model
+        return best_model.best_estimator_
 
 
-    def bayes_search(self, pipe_to_fit, params, cv=5, n_iter=50, random_starts=25, 
+    def random_search(self, pipe_to_fit, X, y, params, cv=5, n_iter=50, scoring='neg_mean_squared_error'):
+
+        search = RandomizedSearchCV(pipe_to_fit, params, n_iter=n_iter, cv=cv, scoring=scoring, refit=True)
+        best_model = search.fit(X, y)
+
+        return best_model.best_estimator_
+
+
+    def bayes_search(self, pipe_to_fit, X, y, params, cv=5, n_iter=50, random_starts=25, 
                      scoring='neg_mean_squared_error', verbose=0):
 
         search = BayesSearchCV(pipe_to_fit, params, n_iter=n_iter, scoring=scoring, refit=True,
                                 cv=cv, optimizer_kwargs={'n_initial_points': random_starts}, verbose=verbose)
-        best_model = self.fit_opt(search)
+        best_model = search.fit(X, y)
 
-        return best_model
+        return best_model.best_estimator_
 
 
-    def cv_score(self, model, cv=5, scoring='neg_mean_squared_error', 
+    def cv_score(self, model, X, y, cv=5, scoring='neg_mean_squared_error', 
                  n_jobs=1, return_mean=True):
 
-        score = cross_val_score(model, self.X, self.y, cv=cv, n_jobs=n_jobs, scoring=scoring)
+        score = cross_val_score(model, X, y, cv=cv, n_jobs=n_jobs, scoring=scoring)
         if return_mean:
             score = np.mean(score)
         return score
 
 
-    def cv_predict(self, model, cv=5, n_jobs=-1):
-        pred = cross_val_predict(model, self.X, self.y, cv=cv, n_jobs=n_jobs)
+    def cv_predict(self, model, X, y, cv=5, n_jobs=-1):
+        pred = cross_val_predict(model, X, y, cv=cv, n_jobs=n_jobs)
         return pred
 
 
-    def cv_time_splits(self, col, min_idx):
+    def cv_time_splits(self, col, X, val_start):
 
-        X_sort = self.X.sort_values(by=col).reset_index(drop=True)
+        X_sort = X.sort_values(by=col).reset_index(drop=True)
 
         ts = X_sort[col].unique()
+        ts = ts[ts>=val_start]
 
         cv_time = []
-        for t in ts[min_idx:]:
+        for t in ts:
             train_idx = list(X_sort[X_sort[col] < t].index)
             test_idx = list(X_sort[X_sort[col] == t].index)
             cv_time.append((train_idx, test_idx))
@@ -209,14 +217,14 @@ class SciKitModel(PipeSetup):
         return cv_time
 
     
-    def cv_predict_time(self, model, cv_time):
+    def cv_predict_time(self, model, X, y, cv_time):
 
         predictions = []
         self.test_indices = []
         for tr, te in cv_time:
             
-            X_train, y_train = self.X.iloc[tr, :], self.y[tr]
-            X_test, _ = self.X.iloc[te, :], self.y[te]
+            X_train, y_train = X.iloc[tr, :], y[tr]
+            X_test, _ = X.iloc[te, :], y[te]
             
             model.fit(X_train, y_train)
             pred = model.predict(X_test)
@@ -226,23 +234,107 @@ class SciKitModel(PipeSetup):
 
         return predictions
 
+        
+    def train_test_split_time(self, X, y, col, time_split):
 
-    def val_scores(self, model, cv):
+        X_train_only = X[X[col] < time_split]
+        y_train_only = y[X_train_only.index].reset_index(drop=True)
+        X_train_only.reset_index(drop=True, inplace=True)
+
+        X_val = X[X[col] >= time_split]
+        y_val = y[X_val.index].reset_index(drop=True)
+        X_val.reset_index(drop=True, inplace=True)
+
+        return X_train_only, X_val, y_train_only, y_val
+
+
+    def time_series_cv(self, model, X, y, params, col_split, time_split, n_splits=5, n_iter=50):
+        
+        # split into the train only and val/holdout datasets
+        X_train_only, X_val_hold, y_train_only, y_val_hold = self.train_test_split_time(X, y, col_split, time_split)
+
+        #--------------
+        # Set up place holders for metrics
+        #--------------
+        
+        # list to store accuracy metrics
+        mean_val_r2 = []
+        mean_hold_r2 = []
+        
+        # arrays to hold all predictions and actuals
+        hold_predictions = np.array([])
+        hold_actuals = np.array([])
+        val_predictions = np.array([])
+        
+        # list to hold the best models
+        best_models = []
+
+        #----------------
+        # Run the KFold train-prediction loop
+        #----------------
+        kf = KFold(n_splits=n_splits, random_state=4567)
+        for val_idx, hold_idx in kf.split(X_val_hold):
+            
+            print('-------')
+
+            # split the val/hold dataset into random validation and holdout sets
+            X_val, X_hold = X_val_hold.iloc[val_idx,:], X_val_hold.iloc[hold_idx,:]
+            y_val, y_hold = y_val_hold.iloc[val_idx], y_val_hold.iloc[hold_idx]
+
+            # concat the current training set using train and validation folds
+            X_train = pd.concat([X_train_only, X_val], axis=0).reset_index(drop=True)
+            y_train = pd.concat([y_train_only, y_val], axis=0).reset_index(drop=True)
+            
+            # get the CV time splits and find the best model
+            cv_time = self.cv_time_splits(col_split, X_train, time_split)
+            best_model = self.random_search(model, X_train, y_train, params, cv=cv_time, n_iter=n_iter)
+
+            # score the best model on validation and holdout sets
+            _, val_r2 = self.val_scores(best_model, X_train, y_train, cv=cv_time)
+            _, hold_r2 = self.test_scores(best_model, X_hold, y_hold)
+            mean_val_r2.append(val_r2); mean_hold_r2.append(hold_r2)
+            best_models.append(best_model)
+
+            # get the holdout and validation predictions and store
+            hold_predictions = np.concatenate([hold_predictions, best_model.predict(X_hold)])
+            hold_actuals = np.concatenate([hold_actuals, y_hold])
+
+            cv_time = self.cv_time_splits(col_split, X, time_split)
+            val_pred_cur = self.cv_predict_time(best_model, X, y, cv_time)
+            val_predictions = np.append(val_predictions, np.array(val_pred_cur))
+
+        # calculate the mean scores
+        mean_scores = [round(np.mean(mean_val_r2), 3), round(np.mean(mean_hold_r2), 3)]
+        print('Mean Scores:', mean_scores)
+
+        # aggregate all the prediction for val, holds, and combined val/hold
+        val_predictions = np.mean(val_predictions.reshape(n_splits, len(val_pred_cur)), axis=0)
+        oof_predictions = {
+            'val': val_predictions, 
+            'hold': hold_predictions,
+            'combined': np.mean([val_predictions, hold_predictions], axis=0)
+            }
+
+        return best_models, mean_scores, oof_predictions, hold_actuals
+
+
+    def val_scores(self, model, X, y, cv):
 
         if self.model_obj == 'reg':
-            mse = self.cv_score(model, cv=5, scoring=self.scorer('mse'))
-            r2 = self.cv_score(model, cv=5, scoring=self.scorer('r2'))
-            
-            for v, m in zip(['Val MSE:', 'Val R2:'], [mse, r2]):
+            mse = self.cv_score(model, X, y, cv=5, scoring=self.scorer('mse'))
+            r2 = self.cv_score(model, X, y, cv=5, scoring=self.scorer('r2'))
+            r2_fit = model.fit(X, y).score(X, y)
+
+            for v, m in zip(['Val MSE:', 'Val R2:', 'Fit R2:'], [mse, r2, r2_fit]):
                 print(v, round(m, 3))
 
             return mse, r2
 
-    def test_scores(self, model, X_test, y_test):
+    def test_scores(self, model, X, y):
 
         if self.model_obj == 'reg':
-            mse = mean_squared_error(y_test, model.predict(X_test))
-            r2 = r2_score(y_test, model.predict(X_test))
+            mse = mean_squared_error(y, model.predict(X))
+            r2 = r2_score(y, model.predict(X))
             
             for v, m in zip(['Test MSE:', 'Test R2:'], [mse, r2]):
                 print(v, round(m, 3))
@@ -256,6 +348,16 @@ class SciKitModel(PipeSetup):
 
         elif time_or_all=='all':
             return self.data.loc[:, cols]
+
+    
+    def print_coef(self, model, cols):
+
+        # get out the coefficients or feature importances from the model
+        try: feat_imp = pd.Series(model[-1].coef_, index=cols)
+        except: feat_imp = pd.Series(model[-1].feature_importances_, index=cols)
+        
+        # print out the oefficents of stacked model
+        print('\nFeature Importances\n--------\n', feat_imp)
 
 
 

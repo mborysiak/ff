@@ -26,6 +26,8 @@ class DataSetup:
             self.y = None
             print(f'{y_metric} not in dataframe to create y')
 
+        return self.X, self.y
+
 
     def Xy_split_list(self, y_metric, col_list):
         """Split train dataset into X and y by passing list of desired columns
@@ -48,6 +50,8 @@ class DataSetup:
         else: 
             self.y = None
             print(f'{y_metric} not in dataframe to create y')
+
+        return self.X, self.y
 
     def return_X_y(self):
         return self.X, self.y
