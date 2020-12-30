@@ -86,8 +86,8 @@ class SciKitModel(PipeSetup):
 
             # model params
             'ridge': {'alpha': self.param_range('int', 1, 1000, 1, br)},
-            'lasso': {'alpha': self.param_range('int', 1, 1000, 1, br)},
-            'enet': {'alpha': self.param_range('int', 1, 1000, 1, br),
+            'lasso': {'alpha': self.param_range('real', 0.01, 25, 0.1, br)},
+            'enet': {'alpha': self.param_range('real', 0.01, 50, 0.1, br),
                     'l1_ratio': self.param_range('real', 0.05, 0.95, 0.05, br)},
             'rf': {'n_estimators': self.param_range('int', 50, 250, 10, br),
                     'max_depth': self.param_range('int', 2, 30, 2, br),
@@ -113,7 +113,7 @@ class SciKitModel(PipeSetup):
             'knn': {'n_neighbors':  self.param_range('int',1, 30, 1, br),
                     'weights': self.param_range('cat',['distance', 'uniform'], None, None, br),
                     'algorithm': self.param_range('cat', ['auto', 'ball_tree', 'kd_tree', 'brute'], None, None, br)},
-            'svr': {'C': self.param_range('real', 0.1, 100, 1, br)}
+            'svr': {'C': self.param_range('int', 1, 100, 1, br)}
         }
 
         # initialize the parameter dictionary
@@ -358,6 +358,45 @@ class SciKitModel(PipeSetup):
         
         # print out the oefficents of stacked model
         print('\nFeature Importances\n--------\n', feat_imp)
+
+
+    
+
+    def X_y_stack(self, met, pred, actual):
+
+        X = pd.DataFrame([v['combined'] for k,v in pred.items() if met in k]).T
+        X.columns = [k for k,_ in pred.items() if met in k]
+        y = pd.Series(actual[X.columns[0]], name='y_act')
+
+        return X, y
+
+        
+    def best_stack(self, est, X_stack, y_stack):
+
+        X_stack_shuf = X_stack.sample(frac=1, random_state=1234).reset_index(drop=True)
+        y_stack_shuf = y_stack.sample(frac=1, random_state=1234).reset_index(drop=True)
+
+        stack_params = self.default_params(est)
+        stack_params['k_best__k'] = range(1, X_stack_shuf.shape[1])
+
+        best_model = self.random_search(est, X_stack_shuf, y_stack_shuf, 
+                                    stack_params, cv=5, n_iter=500)
+
+        # print the OOS scores for ADP and model stack
+        print('ADP Score\n--------')
+        adp_col = [c for c in X_stack.columns if 'adp' in c]
+        _, _ = self.val_scores(self.piece('lr')[1], X_stack_shuf[adp_col], y_stack_shuf, cv=5)
+
+        print('\nStack Score\n--------')
+        _, _ = self.val_scores(best_model, X_stack_shuf, y_stack_shuf, cv=3)
+
+        imp_cols = X_stack_shuf.columns[best_model['k_best'].get_support()]
+        self.print_coef(best_model, imp_cols)
+
+        return best_model
+
+
+    
 
 
 
