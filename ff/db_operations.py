@@ -64,7 +64,7 @@ class DataManage:
         return pd.read_sql_query(q, conn)
 
 
-    def write_to_db(self, df, db_name, table_name, if_exists):
+    def write_to_db(self, df, db_name, table_name, if_exist, create_backup=False):
         """Write data to table by creating or appending
 
         Args:
@@ -73,16 +73,46 @@ class DataManage:
             table_name (str): Name of table to create or modify
             if_exists (str): 'append' or 'replace' arguments to pass to df.to_sql
         """    
+        if create_backup:
+            # create backup of current database
+            self.backup_db(db_name)
+
+        # connect to database and create or update table
+        conn = self.db_connect(db_name)
+        df.to_sql(name=table_name, con=conn, if_exists=if_exist, index=False)
+        conn.close()
+        
+        # write out confirmation
+        print(f'{if_exist.title()}(ed) data to {db_name}.{table_name}' )
+
+
+    def csv_to_db(self, df, db_name, table_name):
+        '''
+        Helper function to bulk upload data to the postgres database via a CSV.
+        Note that this function only appends data to the database, it does not overwrite.
+        To overwrite, you must first use TRUNCATE to clear all the data in the database.
+        '''
         # create backup of current database
         self.backup_db(db_name)
 
         # connect to database and create or update table
         conn = self.db_connect(db_name)
-        df.to_sql(name=table_name, con=conn, if_exists=if_exists, index=False)
+        
+        dir_path = f'{self.data_path}/CSV_Dumps/'
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+            
+        file_path = dir_path + table_name + '.csv'
+        df.to_csv(file_path, header=False, index=False)
+
+        cur = conn.cursor()
+        with open(file_path, 'r') as f:
+            cur.copy_from(f, table_name, sep=',')
+            
+        conn.commit()
         conn.close()
         
-        # write out confirmation
-        print(f'{if_exists.title()}(ed) data to {db_name}.{table_name}' )
+        return print('Success Upload ' + table_name)
 
 
     def delete_from_db(self, db_name, table_name, where_state):

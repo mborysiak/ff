@@ -1,5 +1,5 @@
-from ff.modeling.data_setup import DataSetup
-from ff.modeling.pipe_setup import PipeSetup
+from skmodel.data_setup import DataSetup
+from skmodel.pipe_setup import PipeSetup
 import pandas as pd
 import numpy as np
 

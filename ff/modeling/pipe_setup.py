@@ -1,5 +1,7 @@
-from ff.modeling.data_setup import DataSetup
-from sklearn.pipeline import Pipeline, FeatureUnion
+from skmodel.data_setup import DataSetup
+from sklearn.pipeline import FeatureUnion
+from imblearn.pipeline import Pipeline
+from imblearn.over_sampling import SMOTE
 
 # feature selection
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
@@ -7,7 +9,7 @@ from sklearn.decomposition import PCA
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.feature_selection import SelectFromModel, SelectKBest,SelectPercentile, mutual_info_regression, f_regression
+from sklearn.feature_selection import SelectFromModel, SelectKBest,SelectPercentile, mutual_info_regression, f_regression, f_classif
 from sklearn.cluster import FeatureAgglomeration
 
 # import all various models
@@ -117,17 +119,33 @@ class PipeSetup(DataSetup):
         Args:
             label (str): Label of desired component to return. To return all
                          choices use function return_piece_options().
-                         Options: 'num_impute' = SimpleImputer()
+                         
+                         Options: Preprocessing
+                                  ----
+                                  'one_hot' = OneHotEncoder()
+                                  'impute' = SimpleImputer()
                                   'std_scale' = OneHotEncoder() 
                                   'min_max_scale' = MinMaxScaler()
-                                  'pca' = PCA()
+                                  'smote' = SMOTE()
+
+                                  Preprocessing
+                                  ----
                                   'feature_select' = FeatureSelect()
                                   'feature_drop' = FeatureDrop()
-                                  'select_perc' = SelectPercentile()
-                                  'select_from_model' = SelectFromModel()
-                                  'agglomeration' = FeatureAgglomeration()
+                                  'select_perc' = SelectPercentile(score_func=f_regression)
+                                  'select_perc_c' = SelectPercentile(score_func=f_classif)
                                   'k_best' = SelectKBest(score_func=f_regression, k=10)
+                                  'k_best_c' = SelectKBest(score_func=f_classif, k=10)
+                                  'select_from_model' = SelectFromModel()
                                   'feature_switcher' = FeatureExtractionSwitcher()
+                                   
+                                  Feature Transformation
+                                  ----
+                                  'pca' = PCA()
+                                  'agglomeration' = FeatureAgglomeration()
+                                  
+                                  Regression Models
+                                  ----
                                   'lr' = LinearRegression()
                                   'ridge' = Ridge()
                                   'lasso' = Lasso()
@@ -136,25 +154,46 @@ class PipeSetup(DataSetup):
                                   'xgb' = XGBRegressor()
                                   'lgbm' = LGBMRegressor()
                                   'knn' = KNeighborsRegressor()
-                                  'gbm' = GradientBoostingRegressor(),
+                                  'gbm' = GradientBoostingRegressor()
                                   'svr' = LinearSVR()
+
+                                  Classification Models
+                                  ----
+                                  'lr_c' = LogisticRegression()
+                                  'rf_c' = RandomForestClassifier()
+                                  'xgb_c' = XGBClassifier()
+                                  'lgbm_c' = LGBMClassifier()
+                                  'knn_c' = KNeighborsClassifier()
+                                  'gbm_c' = GradientBoostingClassifier()
+                                  'svc' = LinearSVC()
 
         Returns:
             tuple: (Label, Object) tuple of specified component
         """      
         piece_options = {
+
+                # data transformation
                 'one_hot': OneHotEncoder(),
                 'impute': SimpleImputer(),
                 'std_scale': StandardScaler(),
                 'min_max_scale': MinMaxScaler(),
-                'pca': PCA(),
+                'smote': SMOTE(),
+
+                #feature selection
                 'feature_select': FeatureSelect(['avg_pick']),
                 'feature_drop': FeatureDrop(),
                 'select_perc': SelectPercentile(score_func=f_regression, percentile=10),
+                'select_perc_c': SelectPercentile(score_func=f_classif, percentile=10),
                 'select_from_model': SelectFromModel(estimator=Ridge()),
-                'agglomeration': FeatureAgglomeration(),
                 'k_best': SelectKBest(score_func=f_regression, k=10),
+                'k_best_c': SelectKBest(score_func=f_classif, k=10),
                 'feature_switcher': FeatureExtractionSwitcher(),
+
+                # feature transformation
+                'pca': PCA(),
+                'agglomeration': FeatureAgglomeration(),
+
+                # regression algorithms
                 'lr': LinearRegression(),
                 'ridge': Ridge(),
                 'lasso': Lasso(),
@@ -164,7 +203,16 @@ class PipeSetup(DataSetup):
                 'lgbm': LGBMRegressor(n_jobs=1),
                 'knn': KNeighborsRegressor(n_jobs=1),
                 'gbm': GradientBoostingRegressor(),
-                'svr': LinearSVR()
+                'svr': LinearSVR(),
+
+                # classification algorithms
+                'lr_c': LogisticRegression(solver='liblinear'),
+                'rf_c': RandomForestClassifier(n_jobs=1),
+                'xgb_c': XGBClassifier(n_jobs=1),
+                'lgbm_c': LGBMClassifier(n_jobs=1),
+                'knn_c': KNeighborsClassifier(n_jobs=1),
+                'gbm_c': GradientBoostingClassifier(),
+                'svc': LinearSVC()
             }
 
         piece = (label, piece_options[label])
@@ -190,23 +238,24 @@ class PipeSetup(DataSetup):
         return tuple(piece)
 
     
-    def _column_transform(self, num_pipe, cat_pipe):
-        """Function that combines numeric and categorical pipeline transformers
+    # def _column_transform(self, num_pipe, cat_pipe):
+    #     """Function that combines numeric and categorical pipeline transformers
 
-        Args:
-            num_pipe (sklearn.Pipeline): Numeric transformation pipeline
-            cat_pipe (sklearn.Pipeline): Categorical transformation pipeline
+    #     Args:
+    #         num_pipe (sklearn.Pipeline): Numeric transformation pipeline
+    #         cat_pipe (sklearn.Pipeline): Categorical transformation pipeline
 
-        Returns:
-            sklear.ColumnTransformer: ColumnTransformer object with both numeric 
-                                      and categorical trasnformation steps
-        """        
-        return ColumnTransformer(
-                    transformers=[
-                        ('numeric', num_pipe, self.num_features),
-                        ('cat', cat_pipe, self.cat_features)
-                    ])
+    #     Returns:
+    #         sklear.ColumnTransformer: ColumnTransformer object with both numeric 
+    #                                   and categorical trasnformation steps
+    #     """        
+    #     return ColumnTransformer(
+    #                 transformers=[
+    #                     ('numeric', num_pipe, self.num_features),
+    #                     ('cat', cat_pipe, self.cat_features)
+    #                 ])
     
+
     def ensemble_pipe(self, pipes):
         """Create a mean ensemble pipe where individual pipes feed into 
            a mean voting ensemble model.
@@ -263,5 +312,6 @@ class PipeSetup(DataSetup):
 
         if self.model_obj == 'reg':
             return StackingRegressor(pipes, final_estimator=final_estimator)
-        if self.model_obj == 'reg':
+        
+        if self.model_obj == 'class':
             return StackingRegressor(pipes, final_estimator=final_estimator)
