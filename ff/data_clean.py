@@ -26,6 +26,35 @@ def name_clean(player_name):
     # replace dashes with space and title case / strip whitespace
     player_name = player_name.replace('-', ' ')
     player_name = player_name.title().rstrip().lstrip()
+
+    renames = [
+                ['Gabe Davis', 'Gabriel Davis'],
+                ['Eli Mitchell', 'Elijah Mitchell'],
+                ['Ken Walker', 'Kenneth Walker'],
+                ['Jeffery Wilson', 'Jeff Wilson'],
+                ['Lv', 'LVR'],
+                ['Jax', 'JAC'],
+                ['LV', 'LVR'],
+                ['JAX', 'JAC'],
+                ['Phillip Walker', 'Pj Walker'],
+                ['Dee Eskridge', "D'Wayne Eskridge"],
+                ['Eli Penny',  "Elijhaa Penny"],
+                ['Josh Palmer', 'Joshua Palmer'],
+                ['Chig Okonkwo', 'Chigoziem Okonkwo'],
+                ['Bennett Skowronek', 'Ben Skowronek'],
+                ['Dennis Schröder', 'Dennis Schroder'],
+                ['Lonnie Walker Iv', 'Lonnie Walker'],
+                ['Marcus Morris Sr', 'Marcus Morris'],
+                ['Mohamed Bamba', 'Mo Bamba'],
+                ['Patrick Mills', 'Patty Mills'],
+                ['Juan Hernangomez', 'Juancho Hernangomez'],
+                ['Alperen Sengün', 'Alperen Sengun'],
+                ['Cameron Thomas', 'Cam Thomas']
+
+            ]
+
+    for old_name, new_name in renames:
+        if player_name == old_name: player_name = new_name
     
     return player_name
 

@@ -115,7 +115,7 @@ class DataManage:
         return print('Success Upload ' + table_name)
 
 
-    def delete_from_db(self, db_name, table_name, where_state):
+    def delete_from_db(self, db_name, table_name, where_state, create_backup=True):
         """Delete records from table according to WHERE statement
 
         Args:
@@ -124,7 +124,7 @@ class DataManage:
             where_state (str): Condition to pass to WHERE statement
         """  
         # create backup of current database
-        self.backup_db(db_name)
+        if create_backup: self.backup_db(db_name)
 
         # connect to database and create cursor object
         conn = self.db_connect(db_name)
