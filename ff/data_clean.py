@@ -49,7 +49,8 @@ def name_clean(player_name):
                 ['Patrick Mills', 'Patty Mills'],
                 ['Juan Hernangomez', 'Juancho Hernangomez'],
                 ['Alperen Sengün', 'Alperen Sengun'],
-                ['Cameron Thomas', 'Cam Thomas']
+                ['Cameron Thomas', 'Cam Thomas'],
+                ['Tank Dell', 'Nathaniel Dell']
 
             ]
 
