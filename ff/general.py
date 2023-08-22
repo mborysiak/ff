@@ -16,4 +16,4 @@ def get_timestamp():
 
 def get_main_path(folder):
     user = get_username()
-    return f'/Users/{user}/Documents/Github/{folder}/'
+    return f'/Users/{user}/OneDrive/Documents/Github/{folder}/'
