@@ -8,7 +8,7 @@ import pandas as pd
 
 class DataManage:
 
-    def __init__(self, data_path):
+    def __init__(self, data_path, timeout=10):
         """Create DataManage class by passing path to main database directory
 
         Args:
@@ -16,7 +16,7 @@ class DataManage:
         """        
 
         self.data_path = data_path
-
+        self.timeout = timeout
 
     def db_connect(self, db_name):
         """Connect to specific database in data_path
@@ -27,7 +27,7 @@ class DataManage:
         Returns:
             sqlite3.connection: Connection to sqlite3 database
         """    
-        return sqlite3.connect(f'{self.data_path}/{db_name}.sqlite3')
+        return sqlite3.connect(f'{self.data_path}/{db_name}.sqlite3', timeout=self.timeout)
 
 
     def backup_db(self, db_name, backup_folder='DB_Versioning'):
