@@ -51,7 +51,8 @@ def name_clean(player_name):
                 ['Alperen Sengün', 'Alperen Sengun'],
                 ['Cameron Thomas', 'Cam Thomas'],
                 ['Tank Dell', 'Nathaniel Dell'],
-                ["De'Von Achane", 'Devon Achane']
+                ["De'Von Achane", 'Devon Achane'],
+                ['Mitch Trubisky', 'Mitchell Trubisky']
 
             ]
 
