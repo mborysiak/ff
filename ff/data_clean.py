@@ -19,7 +19,7 @@ def name_clean(player_name):
     """    
 
     # replace common characters to remove from names with no space
-    characters = ['*', '+', '%', ',' ,'III', 'II', '.', 'Jr']
+    characters = ['*', '+', '%', ',' ,'III', 'II', '.', 'Jr', 'Sr']
     for c in characters:
         player_name = player_name.replace(c, '')
         
@@ -52,7 +52,8 @@ def name_clean(player_name):
                 ['Cameron Thomas', 'Cam Thomas'],
                 ['Tank Dell', 'Nathaniel Dell'],
                 ["De'Von Achane", 'Devon Achane'],
-                ['Mitch Trubisky', 'Mitchell Trubisky']
+                ['Mitch Trubisky', 'Mitchell Trubisky'],
+                ['Chris Wells', 'Beanie Wells']
 
             ]
 

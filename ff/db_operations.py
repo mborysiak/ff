@@ -8,7 +8,7 @@ import pandas as pd
 
 class DataManage:
 
-    def __init__(self, data_path, timeout=10):
+    def __init__(self, data_path, timeout=45):
         """Create DataManage class by passing path to main database directory
 
         Args:
@@ -61,7 +61,10 @@ class DataManage:
             [type]: [description]
         """        
         conn = self.db_connect(db_name)
-        return pd.read_sql_query(q, conn)
+        df = pd.read_sql_query(q, conn)
+        conn.close()
+        
+        return df
 
 
     def write_to_db(self, df, db_name, table_name, if_exist, create_backup=False):
